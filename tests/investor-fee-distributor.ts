@@ -23,6 +23,9 @@ describe("investor-fee-distributor", () => {
   const program = anchor.workspace
     .InvestorFeeDistributor as Program<InvestorFeeDistributor>;
 
+  // Get payer from wallet
+  const payer = (provider.wallet as anchor.Wallet).payer;
+
   // Test accounts
   let quoteMint: PublicKey;
   let vault: Keypair;
@@ -60,7 +63,7 @@ describe("investor-fee-distributor", () => {
     // Create quote mint
     quoteMint = await createMint(
       provider.connection,
-      provider.wallet.payer,
+      payer,
       provider.wallet.publicKey,
       null,
       9
@@ -83,7 +86,7 @@ describe("investor-fee-distributor", () => {
 
     creatorQuoteAta = await createAccount(
       provider.connection,
-      provider.wallet.payer,
+      payer,
       quoteMint,
       creator.publicKey
     );
@@ -122,7 +125,7 @@ describe("investor-fee-distributor", () => {
 
       const quoteAta = await createAccount(
         provider.connection,
-        provider.wallet.payer,
+        payer,
         quoteMint,
         investorKeypair.publicKey
       );
@@ -199,10 +202,10 @@ describe("investor-fee-distributor", () => {
     
     await mintTo(
       provider.connection,
-      provider.wallet.payer,
+      payer,
       quoteMint,
       treasuryPda,
-      provider.wallet.payer,
+      payer,
       feeAmount
     );
 
@@ -302,7 +305,7 @@ describe("investor-fee-distributor", () => {
     // Verify creator received remainder
     const creatorBalance = await getAccount(provider.connection, creatorQuoteAta);
     assert.isTrue(creatorBalance.amount > 0);
-    console.log(`  Creator balance: ${creatorBalance.amount.toString() / LAMPORTS_PER_SOL} tokens`);
+    console.log(`  Creator balance: ${Number(creatorBalance.amount) / LAMPORTS_PER_SOL} tokens`);
   });
 
   it("Prevents distribution within 24 hours", async () => {

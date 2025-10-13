@@ -173,7 +173,7 @@ class DistributionManager {
         lockedAmount,
       });
       
-      console.log(`  Investor ${i + 1}: ${lockPercentage.toFixed(2) * 100}% locked`);
+      console.log(`  Investor ${i + 1}: ${(lockPercentage * 100).toFixed(2)}% locked`);
     }
     
     console.log("\n✓ All investors created");

@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "programs/*"
+    "programs/investor-fee-distributor"
 ]
 
 [profile.release]
