@@ -89,7 +89,7 @@ creator_amount = claimed_quote - total_distributed_to_investors
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/investor-fee-distributor.git
+git clone https://github.com/TokenHarvester/investor-fee-distributor.git
 cd investor-fee-distributor
 
 # Install dependencies
