@@ -12,6 +12,8 @@ declare_id!("4uZxW8UrmijWukHwDShTqwc8EyhQxJ5rxaijnVXKbZaF");
 #[program]
 pub mod investor_fee_distributor {
     use super::*;
+
+    /// Initialize the honorary fee position and distribution policy
     pub fn initialize(
         ctx: Context<Initialize>,
         total_investor_allocation: u64,
@@ -30,8 +32,9 @@ pub mod investor_fee_distributor {
         )
     }
 
-    pub fn distribute_fees(
-        ctx: Context<DistributeFees>,
+    /// Distribute fees to investors - paginated and permissionless
+    pub fn distribute_fees<'info>(
+        ctx: Context<'_, '_, '_, 'info, DistributeFees<'info>>,
         page_size: u8,
     ) -> Result<()> {
         instructions::distribute::handler(ctx, page_size)

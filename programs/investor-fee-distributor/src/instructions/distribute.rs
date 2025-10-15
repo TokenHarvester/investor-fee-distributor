@@ -74,9 +74,10 @@ pub struct DistributeFees<'info> {
     //   2. stream_account (Streamflow stream)
 }
 
-pub fn handler(ctx: Context<DistributeFees>, page_size: u8) -> Result<()> {
-    let policy = &ctx.accounts.policy;
-    let progress = &mut ctx.accounts.progress;
+pub fn handler<'info>(
+    ctx: Context<'_, '_, '_, 'info, DistributeFees<'info>>,
+    page_size: u8,
+) -> Result<()> {
     let clock = Clock::get()?;
     let current_ts = clock.unix_timestamp;
     
@@ -87,23 +88,21 @@ pub fn handler(ctx: Context<DistributeFees>, page_size: u8) -> Result<()> {
     );
     
     // Check if this is a new day
-    let is_new_day = progress.is_new_day(current_ts);
+    let is_new_day = ctx.accounts.progress.is_new_day(current_ts);
     
     if is_new_day {
         // First page of new day
         require!(
-            progress.pagination_cursor == 0,
+            ctx.accounts.progress.pagination_cursor == 0,
             FeeDistributorError::NotFirstPage
         );
         
-        // Start new day
-        progress.start_new_day(current_ts);
-        
         // Claim fees from DAMM v2 position (simulated here)
-        // In production, you'd call the actual DAMM v2 claim instruction
         let claimed_amount = claim_fees_from_damm(&ctx)?;
         
-        progress.current_day_claimed = claimed_amount;
+        // Start new day
+        ctx.accounts.progress.start_new_day(current_ts);
+        ctx.accounts.progress.current_day_claimed = claimed_amount;
         
         emit!(QuoteFeesClaimed {
             amount: claimed_amount,
@@ -112,25 +111,25 @@ pub fn handler(ctx: Context<DistributeFees>, page_size: u8) -> Result<()> {
     } else {
         // Not a new day - validate we can continue pagination
         require!(
-            !progress.day_completed,
+            !ctx.accounts.progress.day_completed,
             FeeDistributorError::DayAlreadyCompleted
         );
         
         require!(
-            current_ts >= progress.last_distribution_ts,
+            current_ts >= ctx.accounts.progress.last_distribution_ts,
             FeeDistributorError::TooSoonToDistribute
         );
     }
     
     // Calculate pagination bounds
-    let start_idx = progress.pagination_cursor as usize;
+    let start_idx = ctx.accounts.progress.pagination_cursor as usize;
     let end_idx = std::cmp::min(
         start_idx + page_size as usize,
-        progress.total_investors as usize
+        ctx.accounts.progress.total_investors as usize
     );
     
     require!(
-        start_idx < progress.total_investors as usize,
+        start_idx < ctx.accounts.progress.total_investors as usize,
         FeeDistributorError::InvalidPaginationCursor
     );
     
@@ -139,8 +138,6 @@ pub fn handler(ctx: Context<DistributeFees>, page_size: u8) -> Result<()> {
     
     let distribution_result = distribute_to_investors(
         &ctx,
-        policy,
-        progress,
         investor_accounts,
         start_idx,
         end_idx,
@@ -148,13 +145,13 @@ pub fn handler(ctx: Context<DistributeFees>, page_size: u8) -> Result<()> {
     )?;
     
     // Update progress
-    progress.current_day_distributed_investors = progress
+    ctx.accounts.progress.current_day_distributed_investors = ctx.accounts.progress
         .current_day_distributed_investors
         .checked_add(distribution_result.total_distributed)
         .ok_or(FeeDistributorError::ArithmeticOverflow)?;
     
-    progress.carry_over_dust = distribution_result.remaining_dust;
-    progress.pagination_cursor = end_idx as u32;
+    ctx.accounts.progress.carry_over_dust = distribution_result.remaining_dust;
+    ctx.accounts.progress.pagination_cursor = end_idx as u32;
     
     emit!(InvestorPayoutPage {
         page_start: start_idx as u32,
@@ -164,15 +161,15 @@ pub fn handler(ctx: Context<DistributeFees>, page_size: u8) -> Result<()> {
     });
     
     // Check if this is the last page
-    if end_idx >= progress.total_investors as usize {
+    if end_idx >= ctx.accounts.progress.total_investors as usize {
         // Distribute remainder to creator
-        let remainder = distribute_remainder_to_creator(&ctx, policy, progress)?;
+        let remainder = distribute_remainder_to_creator(&ctx)?;
         
-        progress.current_day_distributed_creator = remainder;
-        progress.day_completed = true;
+        ctx.accounts.progress.current_day_distributed_creator = remainder;
+        ctx.accounts.progress.day_completed = true;
         
         emit!(CreatorPayoutDayClosed {
-            creator: policy.creator_wallet,
+            creator: ctx.accounts.policy.creator_wallet,
             amount: remainder,
             day_timestamp: current_ts,
         });
@@ -188,14 +185,15 @@ struct DistributionResult {
 }
 
 fn distribute_to_investors<'info>(
-    ctx: &Context<DistributeFees<'info>>,
-    policy: &DistributionPolicy,
-    progress: &DistributionProgress,
-    investor_accounts: &[AccountInfo<'info>],
-    start_idx: usize,
-    end_idx: usize,
+    ctx: &Context<'_, '_, '_, 'info, DistributeFees<'info>>,
+    investor_accounts: &'info [AccountInfo<'info>],
+    _start_idx: usize,
+    _end_idx: usize,
     current_ts: i64,
 ) -> Result<DistributionResult> {
+    let policy = &ctx.accounts.policy;
+    let progress = &ctx.accounts.progress;
+    
     // Calculate total locked amount across all investors in this page
     let mut locked_amounts: Vec<u64> = Vec::new();
     let mut total_locked: u64 = 0;
@@ -321,10 +319,9 @@ fn distribute_to_investors<'info>(
 }
 
 fn distribute_remainder_to_creator<'info>(
-    ctx: &Context<DistributeFees<'info>>,
-    _policy: &DistributionPolicy,
-    progress: &DistributionProgress,
+    ctx: &Context<'_, '_, '_, 'info, DistributeFees<'info>>,
 ) -> Result<u64> {
+    let progress = &ctx.accounts.progress;
     let treasury_balance = ctx.accounts.treasury.amount;
     
     if treasury_balance == 0 {
@@ -332,7 +329,7 @@ fn distribute_remainder_to_creator<'info>(
     }
     
     let vault_key = ctx.accounts.vault.key();
-    let treasury_authority_bump = ctx.bumps.treasury_authority;
+    let treasury_authority_bump = *ctx.bumps.get("treasury_authority").unwrap();
     let signer_seeds: &[&[&[u8]]] = &[&[
         VAULT_SEED,
         vault_key.as_ref(),
@@ -405,7 +402,7 @@ fn read_streamflow_locked_amount(
 }
 
 fn claim_fees_from_damm<'info>(
-    ctx: &Context<DistributeFees<'info>>,
+    ctx: &Context<'_, '_, '_, 'info, DistributeFees<'info>>,
 ) -> Result<u64> {
     // PLACEHOLDER: Call actual DAMM v2 claim instruction
     // This would be a CPI to the DAMM program
