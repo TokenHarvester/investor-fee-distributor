@@ -329,7 +329,7 @@ fn distribute_remainder_to_creator<'info>(
     }
     
     let vault_key = ctx.accounts.vault.key();
-    let treasury_authority_bump = *ctx.bumps.get("treasury_authority").unwrap();
+    let treasury_authority_bump = ctx.bumps.treasury_authority;
     let signer_seeds: &[&[&[u8]]] = &[&[
         VAULT_SEED,
         vault_key.as_ref(),
