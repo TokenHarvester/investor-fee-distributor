@@ -34,7 +34,7 @@ pub mod investor_fee_distributor {
 
     /// Distribute fees to investors - paginated and permissionless
     pub fn distribute_fees<'info>(
-        ctx: Context<'_, '_, '_, 'info, DistributeFees<'info>>,
+        ctx: Context<'_, '_, 'info, 'info, DistributeFees<'info>>,
         page_size: u8,
     ) -> Result<()> {
         instructions::distribute::handler(ctx, page_size)

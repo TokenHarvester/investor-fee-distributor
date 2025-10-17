@@ -75,7 +75,7 @@ pub struct DistributeFees<'info> {
 }
 
 pub fn handler<'info>(
-    ctx: Context<'_, '_, '_, 'info, DistributeFees<'info>>,
+    ctx: Context<'_, '_, 'info, 'info, DistributeFees<'info>>,
     page_size: u8,
 ) -> Result<()> {
     let clock = Clock::get()?;
